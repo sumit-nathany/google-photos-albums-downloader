@@ -18,7 +18,7 @@
   await scrollToLoadAllAlbums();
 
   // Step 2: Locate album links
-  const albumLinks = document.querySelectorAll('a.MTmRkb[href]');
+  const albumLinks = Array.from(document.querySelectorAll('a.MTmRkb[href]')).map(link => link.href);
   if (albumLinks.length === 0) {
     console.error("No albums found. Ensure you're on the correct page and the selector is accurate.");
     return;
@@ -26,22 +26,39 @@
 
   console.log(`Found ${albumLinks.length} albums. Starting the process...`);
 
-  for (let i = 0; i < albumLinks.length; i++) {
-    const link = albumLinks[i].href;
+  const openedTabs = new Set();
+
+  for (let i = 0; i < 2; i++) {
+    const link = albumLinks[i];
     console.log(`Processing album ${i + 1} of ${albumLinks.length}: ${link}`);
 
-    // Open album in a new tab
+    if (openedTabs.has(link)) {
+      console.warn(`Album ${link} already processed, skipping.`);
+      continue;
+    }
+
+    // Open the album in a new tab and notify the background script
     const newTab = window.open(link, "_blank");
+    if (newTab) {
+      openedTabs.add(link); // Track this link as opened
 
-    // Wait for the album page to load
-    await delay(5000);
+      // Wait for the new tab to load
+      await delay(20000);
 
-    // Inject script into the new tab to interact with the menu and download
-    newTab.eval(`
-      console.log("checking***");
-    `);
+      // Send a message to inject the interaction script into the new tab
+      chrome.runtime.sendMessage({ action: "clickMoreOptions", url: link }, (response) => {
+        if (response.success) {
+          console.log(`Interaction script executed for album: ${link}`);
+        } else {
+          console.error(`Failed to execute interaction script for album: ${link}`);
+        }
+      });
+    } else {
+      console.error(`Failed to open tab for album ${link}.`);
+      continue;
+    }
 
-    // Wait before moving to the next album
+    // Delay before moving to the next album
     await delay(10000);
   }
 
